@@ -4,7 +4,7 @@ from datetime import datetime
 from openai import OpenAI
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash"
 
 MONTHS_RU = {
     "январь": 1, "января": 1, "jan": 1,
