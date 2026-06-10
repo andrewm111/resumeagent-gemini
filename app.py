@@ -136,7 +136,11 @@ with tab_convert:
                     st.session_state["conv_preview"] = converted
 
                     if save_to_specialists:
-                        save_name = sp_name_convert.strip() or converted.get("name", "").replace(" ", "_")
+                        save_name = (
+                            sp_name_convert.strip()
+                            or converted.get("name", "").replace(" ", "_")
+                            or pdf_file.name.rsplit(".", 1)[0]
+                        )
                         if save_name:
                             try:
                                 save_specialist(save_name, converted)
