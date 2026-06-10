@@ -137,7 +137,7 @@ with tab_convert:
                     st.session_state["conv_preview"] = converted
 
                     u = get_last_usage()
-                    st.caption(f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}")
+                    st.session_state["conv_usage"] = u
 
                     if save_to_specialists:
                         save_name = (
@@ -160,6 +160,10 @@ with tab_convert:
     if st.session_state.get("conv_raw_text"):
         with st.expander("🔍 Debug: что агент получил на вход (первые 3000 символов)"):
             st.text(st.session_state["conv_raw_text"][:3000])
+
+    if st.session_state.get("conv_usage"):
+        u = st.session_state["conv_usage"]
+        st.caption(f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}")
 
     if st.session_state.get("conv_docx"):
         st.success("Готово!")
@@ -295,8 +299,7 @@ with tab_tailor:
                     if humanize_check:
                         tailored = humanize_resume(tailored, api_key)
 
-                    u = get_last_usage()
-                    st.caption(f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}")
+                    st.session_state["tailor_usage"] = get_last_usage()
 
                     notes = tailored.pop("match_notes", "")
 
@@ -323,6 +326,10 @@ with tab_tailor:
                     st.error(f"Ошибка: {e}")
 
     # Показываем результат из session_state — не пропадёт при перезапуске
+    if st.session_state.get("tailor_usage"):
+        u = st.session_state["tailor_usage"]
+        st.caption(f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}")
+
     if st.session_state.get("last_docx"):
         if st.session_state.get("last_notes"):
             st.info(f"**Почему подходит:** {st.session_state['last_notes']}")
