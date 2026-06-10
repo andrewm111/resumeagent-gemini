@@ -288,6 +288,7 @@ def tailor_resume(brief: str, resume_data: dict, api_key: str) -> dict:
         client,
         TAILOR_SYSTEM,
         TAILOR_PROMPT.format(brief=brief.strip(), resume_json=resume_json),
+        max_tokens=16000,
     )
     changes = _parse_json(raw)
 
