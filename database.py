@@ -20,6 +20,17 @@ def _supabase_config():
     return url.rstrip("/"), key
 
 
+def _table() -> str:
+    name = os.getenv("SUPABASE_TABLE", "")
+    if not name:
+        try:
+            import streamlit as st
+            name = st.secrets.get("SUPABASE_TABLE", "")
+        except Exception:
+            pass
+    return name or "specialists"
+
+
 def _headers(key: str) -> dict:
     return {
         "apikey": key,
@@ -47,7 +58,7 @@ TIMEOUT = 10
 def list_specialists() -> list[str]:
     if use_supabase():
         url, key = _supabase_config()
-        r = httpx.get(f"{url}/rest/v1/specialists?select=name&order=name.asc", headers=_headers(key), timeout=TIMEOUT)
+        r = httpx.get(f"{url}/rest/v1/{_table()}?select=name&order=name.asc", headers=_headers(key), timeout=TIMEOUT)
         r.raise_for_status()
         return [row["name"] for row in r.json()]
     else:
@@ -60,7 +71,7 @@ def list_specialists_summary() -> list[dict]:
     if use_supabase():
         url, key = _supabase_config()
         r = httpx.get(
-            f"{url}/rest/v1/specialists?select=name,data&order=name.asc",
+            f"{url}/rest/v1/{_table()}?select=name,data&order=name.asc",
             headers=_headers(key),
             timeout=TIMEOUT,
         )
@@ -92,7 +103,7 @@ def load_specialist(name: str) -> dict:
     if use_supabase():
         url, key = _supabase_config()
         r = httpx.get(
-            f"{url}/rest/v1/specialists?name=eq.{name}&select=data",
+            f"{url}/rest/v1/{_table()}?name=eq.{name}&select=data",
             headers=_headers(key),
             timeout=TIMEOUT,
         )
@@ -111,7 +122,7 @@ def save_specialist(name: str, data: dict) -> None:
         url, key = _supabase_config()
         payload = {"name": name, "data": data}
         headers = {**_headers(key), "Prefer": "resolution=merge-duplicates"}
-        r = httpx.post(f"{url}/rest/v1/specialists", json=payload, headers=headers, timeout=TIMEOUT)
+        r = httpx.post(f"{url}/rest/v1/{_table()}", json=payload, headers=headers, timeout=TIMEOUT)
         r.raise_for_status()
     else:
         LOCAL_DIR.mkdir(exist_ok=True)
@@ -124,7 +135,7 @@ def delete_specialist(name: str) -> None:
     if use_supabase():
         url, key = _supabase_config()
         r = httpx.delete(
-            f"{url}/rest/v1/specialists?name=eq.{name}",
+            f"{url}/rest/v1/{_table()}?name=eq.{name}",
             headers=_headers(key),
             timeout=TIMEOUT,
         )
