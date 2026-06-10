@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from agent import convert_to_corporate, tailor_resume, tailor_resume_from_text, humanize_resume
 from docx_utils import extract_resume_text, extract_text_from_pdf, build_output_docx
 from database import list_specialists, list_specialists_summary, load_specialist, save_specialist, delete_specialist
+from agent import get_last_usage
 import re
 
 
@@ -134,6 +135,9 @@ with tab_convert:
                     st.session_state["conv_docx"] = docx_bytes
                     st.session_state["conv_filename"] = filename
                     st.session_state["conv_preview"] = converted
+
+                    u = get_last_usage()
+                    st.caption(f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}")
 
                     if save_to_specialists:
                         save_name = (
@@ -290,6 +294,9 @@ with tab_tailor:
 
                     if humanize_check:
                         tailored = humanize_resume(tailored, api_key)
+
+                    u = get_last_usage()
+                    st.caption(f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}")
 
                     notes = tailored.pop("match_notes", "")
 

@@ -1,7 +1,20 @@
 import json
 import re
+import logging
 from datetime import datetime
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
+
+# Gemini 2.5-flash pricing (per 1M tokens)
+_PRICE_IN = 0.075
+_PRICE_OUT = 0.30
+
+_last_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
+
+
+def get_last_usage() -> dict:
+    return _last_usage.copy()
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -80,6 +93,19 @@ def _call(client: OpenAI, system: str, user: str,
             {"role": "user", "content": user},
         ],
     )
+    usage = msg.usage
+    if usage:
+        cost = (usage.prompt_tokens / 1_000_000 * _PRICE_IN +
+                usage.completion_tokens / 1_000_000 * _PRICE_OUT)
+        _last_usage.update({
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+            "cost_usd": cost,
+        })
+        logger.info(
+            "Tokens: %d in / %d out | Cost: $%.5f",
+            usage.prompt_tokens, usage.completion_tokens, cost,
+        )
     return msg.choices[0].message.content.strip()
 
 
