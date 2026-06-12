@@ -16,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from agent import tailor_resume, convert_to_corporate
+from agent import tailor_resume, convert_to_corporate, get_last_usage
 from database import list_specialists_summary, load_specialist, save_specialist
 from docx_utils import build_output_docx, extract_resume_text, extract_text_from_pdf
 
@@ -183,10 +183,15 @@ async def handle_confirm_tailor(update: Update, context: ContextTypes.DEFAULT_TY
         docx_bytes = build_output_docx(tailored, key, TEMPLATE_PATH)
         specialist_name = resume_data.get("name", key)
         filename = _make_filename(tailored, specialist_name)
+        u = get_last_usage()
+        caption = (
+            f"Готово! Резюме {specialist_name} адаптировано под бриф.\n"
+            f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}"
+        )
         await query.message.reply_document(
             document=io.BytesIO(docx_bytes),
             filename=filename,
-            caption=f"Готово! Резюме {specialist_name} адаптировано под бриф.",
+            caption=caption,
         )
         await query.edit_message_text("✅ Готово")
     except Exception as e:
@@ -276,10 +281,14 @@ async def _do_convert(context, name_override: str | None, reply_fn, send_doc_fn)
         name = name_override or structured.get("name", "Специалист")
         save_specialist(name, structured)
 
+        u = get_last_usage()
         docx_bytes = build_output_docx(structured, name, TEMPLATE_PATH)
         filename = _make_filename(structured, name)
         await send_doc_fn(docx_bytes, filename, name)
-        await reply_fn(f"✅ Сохранено в базу как *{name}*.")
+        await reply_fn(
+            f"✅ Сохранено в базу как *{name}*.\n"
+            f"Токены: {u['prompt_tokens']} вход / {u['completion_tokens']} выход | ~${u['cost_usd']:.4f}"
+        )
     except Exception as e:
         logger.exception("Convert error")
         await reply_fn(f"Ошибка при конвертации: {e}")
