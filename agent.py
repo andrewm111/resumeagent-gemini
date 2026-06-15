@@ -92,28 +92,41 @@ def _parse_json(raw: str) -> dict:
 
 def _call(client: OpenAI, system: str, user: str,
           model: str = GEMINI_MODEL, max_tokens: int = 8096) -> str:
-    msg = client.chat.completions.create(
-        model=model,
-        max_tokens=max_tokens,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    )
-    usage = msg.usage
-    if usage:
-        cost = (usage.prompt_tokens / 1_000_000 * _PRICE_IN +
-                usage.completion_tokens / 1_000_000 * _PRICE_OUT)
-        _last_usage.update({
-            "prompt_tokens": usage.prompt_tokens,
-            "completion_tokens": usage.completion_tokens,
-            "cost_usd": cost,
-        })
-        logger.info(
-            "Tokens: %d in / %d out | Cost: $%.5f",
-            usage.prompt_tokens, usage.completion_tokens, cost,
-        )
-    return msg.choices[0].message.content.strip()
+    import time
+    last_err = None
+    for attempt in range(3):
+        try:
+            msg = client.chat.completions.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            usage = msg.usage
+            if usage:
+                cost = (usage.prompt_tokens / 1_000_000 * _PRICE_IN +
+                        usage.completion_tokens / 1_000_000 * _PRICE_OUT)
+                _last_usage.update({
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "cost_usd": cost,
+                })
+                logger.info(
+                    "Tokens: %d in / %d out | Cost: $%.5f",
+                    usage.prompt_tokens, usage.completion_tokens, cost,
+                )
+            return msg.choices[0].message.content.strip()
+        except Exception as e:
+            last_err = e
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                wait = 10 * (attempt + 1)
+                logger.warning("503 от Gemini, повтор через %d сек (попытка %d/3)", wait, attempt + 1)
+                time.sleep(wait)
+            else:
+                raise
+    raise last_err
 
 
 def _relevant_projects(brief: str, projects: list, top_n: int = 4) -> tuple:
