@@ -91,7 +91,8 @@ def list_specialists_summary() -> list[dict]:
         display_name = data.get("name", key_name)
         role = data.get("role", "")
         skills = data.get("skills", "")
-        # Take first 3 skills
+        if isinstance(skills, list):
+            skills = ", ".join(str(s) for s in skills)
         skills_short = ", ".join(s.strip() for s in skills.replace("•", ",").split(",")[:3] if s.strip())
         parts = [p for p in [display_name, role, skills_short] if p]
         label = " | ".join(parts)

@@ -67,6 +67,14 @@ def _sort_projects(projects: list) -> list:
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+def _normalize(data: dict) -> dict:
+    """Ensure string fields that might come back as lists are converted to strings."""
+    for field in ("skills", "summary", "contacts", "city", "education"):
+        if isinstance(data.get(field), list):
+            data[field] = ", ".join(str(v) for v in data[field])
+    return data
+
+
 def _parse_json(raw: str) -> dict:
     raw = raw.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
@@ -75,7 +83,6 @@ def _parse_json(raw: str) -> dict:
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        # Claude sometimes adds text before/after JSON — extract the object directly
         start = raw.find('{')
         end = raw.rfind('}')
         if start != -1 and end != -1:
@@ -211,7 +218,7 @@ CONVERT_PROMPT = """Вот сырой текст резюме:
 def convert_to_corporate(raw_text: str, api_key: str) -> dict:
     client = OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
     raw = _call(client, CONVERT_SYSTEM, CONVERT_PROMPT.format(raw_text=raw_text.strip()), max_tokens=16000)
-    result = _parse_json(raw)
+    result = _normalize(_parse_json(raw))
     if "projects" in result:
         result["projects"] = _sort_projects(result["projects"])
     return result
@@ -319,6 +326,7 @@ def tailor_resume(brief: str, resume_data: dict, api_key: str) -> dict:
     changes = _parse_json(raw)
 
     # Merge: start from original, apply only changed fields
+    changes = _normalize(changes)
     result = copy.deepcopy(resume_data)
     result["summary"] = changes.get("summary", result.get("summary", ""))
     result["skills"] = changes.get("skills", result.get("skills", ""))
@@ -428,7 +436,7 @@ def tailor_resume_from_text(brief: str, resume_text: str, api_key: str) -> dict:
 }}"""
 
     raw = _call(client, system, prompt, max_tokens=16000)
-    result = _parse_json(raw)
+    result = _normalize(_parse_json(raw))
     if "projects" in result:
         result["projects"] = _sort_projects(result["projects"])
     return result
