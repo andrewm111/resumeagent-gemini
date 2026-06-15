@@ -103,6 +103,7 @@ def _call(client: OpenAI, system: str, user: str,
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
+                timeout=90.0,
             )
             usage = msg.usage
             if usage:
