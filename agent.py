@@ -323,6 +323,7 @@ TAILOR_PROMPT = """БРИФ КЛИЕНТА:
 
 Адаптируй резюме под бриф.
 Верни ТОЛЬКО изменённые поля — не повторяй то, что не менялось (name, city, contacts, education, dates, type, team).
+ВАЖНО: каждый проект в JSON содержит поле "_idx". Возвращай его без изменений — оно используется для сопоставления.
 
 Верни ТОЛЬКО валидный JSON без markdown-обёртки:
 {{
@@ -330,8 +331,7 @@ TAILOR_PROMPT = """БРИФ КЛИЕНТА:
   "skills": "реальные навыки специалиста, релевантные на первых местах, не более 20-25 позиций",
   "projects": [
     {{
-      "role_company": "точно как в оригинале — для сопоставления",
-      "dates": "точно как в оригинале — для сопоставления",
+      "_idx": 0,
       "description": "обновлённое описание",
       "tasks": ["задача 1", "задача 2"],
       "achievements": ["достижение 1", "достижение 2"],
@@ -347,10 +347,12 @@ def tailor_resume(brief: str, resume_data: dict, api_key: str) -> dict:
     client = OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
 
     all_projects = resume_data.get("projects", [])
-    relevant, rest = _relevant_projects(brief, all_projects)
 
-    # Send only relevant projects to Claude
-    slim_data = {**resume_data, "projects": relevant}
+    # Stamp stable indices on copies — avoids mutating resume_data
+    indexed_projects = [{**p, "_idx": i} for i, p in enumerate(all_projects)]
+    relevant_indexed, _ = _relevant_projects(brief, indexed_projects)
+
+    slim_data = {**resume_data, "projects": relevant_indexed}
     resume_json = json.dumps(slim_data, ensure_ascii=False, indent=2)
 
     raw = _call(
@@ -368,16 +370,11 @@ def tailor_resume(brief: str, resume_data: dict, api_key: str) -> dict:
     result["skills"] = changes.get("skills", result.get("skills", ""))
     result["match_notes"] = changes.get("match_notes", "")
 
-    # Apply changes to relevant projects, keep rest untouched
-    # Use role_company + dates as composite key to handle duplicate company names (e.g. two Freelance entries)
-    def _proj_key(p: dict) -> str:
-        return f"{p.get('role_company', '')}||{p.get('dates', '')}"
-
-    changed_projects = {_proj_key(p): p for p in changes.get("projects", [])}
-    for proj in result.get("projects", []):
-        key = _proj_key(proj)
-        if key in changed_projects:
-            patch = changed_projects[key]
+    # Match by _idx — unique even when company name and dates are identical
+    changed_by_idx = {p["_idx"]: p for p in changes.get("projects", []) if "_idx" in p}
+    for i, proj in enumerate(result.get("projects", [])):
+        if i in changed_by_idx:
+            patch = changed_by_idx[i]
             for field in ("description", "tasks", "achievements", "stack"):
                 if field in patch:
                     proj[field] = patch[field]
