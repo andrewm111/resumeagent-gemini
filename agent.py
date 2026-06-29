@@ -331,6 +331,7 @@ TAILOR_PROMPT = """БРИФ КЛИЕНТА:
   "projects": [
     {{
       "role_company": "точно как в оригинале — для сопоставления",
+      "dates": "точно как в оригинале — для сопоставления",
       "description": "обновлённое описание",
       "tasks": ["задача 1", "задача 2"],
       "achievements": ["достижение 1", "достижение 2"],
@@ -368,9 +369,13 @@ def tailor_resume(brief: str, resume_data: dict, api_key: str) -> dict:
     result["match_notes"] = changes.get("match_notes", "")
 
     # Apply changes to relevant projects, keep rest untouched
-    changed_projects = {p["role_company"]: p for p in changes.get("projects", [])}
+    # Use role_company + dates as composite key to handle duplicate company names (e.g. two Freelance entries)
+    def _proj_key(p: dict) -> str:
+        return f"{p.get('role_company', '')}||{p.get('dates', '')}"
+
+    changed_projects = {_proj_key(p): p for p in changes.get("projects", [])}
     for proj in result.get("projects", []):
-        key = proj.get("role_company", "")
+        key = _proj_key(proj)
         if key in changed_projects:
             patch = changed_projects[key]
             for field in ("description", "tasks", "achievements", "stack"):
