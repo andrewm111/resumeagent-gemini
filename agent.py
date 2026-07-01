@@ -72,6 +72,10 @@ def _normalize(data: dict) -> dict:
     for field in ("skills", "summary", "contacts", "city", "education"):
         if isinstance(data.get(field), list):
             data[field] = ", ".join(str(v) for v in data[field])
+    for proj in data.get("projects", []):
+        for field in ("description", "stack", "role_company", "dates", "type", "team"):
+            if isinstance(proj.get(field), list):
+                proj[field] = ", ".join(str(v) for v in proj[field])
     return data
 
 
