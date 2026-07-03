@@ -108,7 +108,6 @@ def _call(client: OpenAI, system: str, user: str,
                     {"role": "user", "content": user},
                 ],
                 timeout=90.0,
-                extra_body={"generationConfig": {"thinkingConfig": {"thinkingBudget": 2000}}},
             )
             usage = msg.usage
             if usage:
