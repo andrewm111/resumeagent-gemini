@@ -108,6 +108,7 @@ def _call(client: OpenAI, system: str, user: str,
                     {"role": "user", "content": user},
                 ],
                 timeout=90.0,
+                extra_body={"generationConfig": {"thinkingConfig": {"thinkingBudget": 0}}},
             )
             usage = msg.usage
             if usage:
@@ -363,7 +364,7 @@ def tailor_resume(brief: str, resume_data: dict, api_key: str) -> dict:
         client,
         TAILOR_SYSTEM,
         TAILOR_PROMPT.format(brief=brief.strip(), resume_json=resume_json),
-        max_tokens=16000,
+        max_tokens=32000,
     )
     changes = _parse_json(raw)
 
