@@ -7,8 +7,8 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 # Gemini 2.5-flash pricing (per 1M tokens)
-_PRICE_IN = 1.50
-_PRICE_OUT = 9.00
+_PRICE_IN = 0.10
+_PRICE_OUT = 0.40
 
 _last_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
 
