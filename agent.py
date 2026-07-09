@@ -17,7 +17,7 @@ def get_last_usage() -> dict:
     return _last_usage.copy()
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 MONTHS_RU = {
     "январь": 1, "января": 1, "jan": 1,
