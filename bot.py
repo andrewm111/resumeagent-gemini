@@ -103,7 +103,13 @@ async def handle_brief(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["brief"] = brief
 
-    specialists = list_specialists_summary()
+    try:
+        specialists = list_specialists_summary()
+    except Exception as e:
+        logger.exception("list_specialists_summary error")
+        await update.message.reply_text(f"Ошибка при загрузке базы специалистов: {e}")
+        return ConversationHandler.END
+
     if not specialists:
         await update.message.reply_text(
             "База специалистов пуста. Сначала загрузи PDF/DOCX резюме в чат."
@@ -368,7 +374,12 @@ async def handle_confirm_convert(update: Update, context: ContextTypes.DEFAULT_T
 async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update.effective_user.id):
         return
-    specialists = list_specialists_summary()
+    try:
+        specialists = list_specialists_summary()
+    except Exception as e:
+        logger.exception("cmd_list error")
+        await update.message.reply_text(f"Ошибка при загрузке базы: {e}")
+        return
     if not specialists:
         await update.message.reply_text("База пуста.")
         return
