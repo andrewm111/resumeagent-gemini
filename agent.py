@@ -6,9 +6,9 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-# Gemini 2.5-flash pricing (per 1M tokens)
-_PRICE_IN = 0.10
-_PRICE_OUT = 0.40
+# Gemini 3.1 Flash-Lite pricing (per 1M tokens)
+_PRICE_IN = 0.25
+_PRICE_OUT = 1.50
 
 _last_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
 
@@ -17,7 +17,7 @@ def get_last_usage() -> dict:
     return _last_usage.copy()
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemini-3.1-flash-lite"
 
 MONTHS_RU = {
     "январь": 1, "января": 1, "jan": 1,
