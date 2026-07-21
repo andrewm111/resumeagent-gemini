@@ -6,9 +6,12 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-# Gemini 3.1 Flash-Lite pricing (per 1M tokens)
-_PRICE_IN = 0.25
-_PRICE_OUT = 1.50
+# Pricing per 1M tokens, keyed by model — _call() looks up the right
+# rate for whichever model actually served the request.
+_PRICING = {
+    "gemini-2.5-flash-lite": (0.10, 0.40),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
+}
 
 _last_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
 
@@ -17,7 +20,11 @@ def get_last_usage() -> dict:
     return _last_usage.copy()
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-GEMINI_MODEL = "gemini-3.1-flash-lite"
+
+# Convert (raw text → corporate JSON) is cheap structuring work — flash-lite handles it well.
+CONVERT_MODEL = "gemini-2.5-flash-lite"
+# Tailor/humanize must follow a long, precise rule set — worth the extra cost.
+TAILOR_MODEL = "gemini-3.1-flash-lite"
 
 MONTHS_RU = {
     "январь": 1, "января": 1, "jan": 1,
@@ -95,9 +102,10 @@ def _parse_json(raw: str) -> dict:
 
 
 def _call(client: OpenAI, system: str, user: str,
-          model: str = GEMINI_MODEL, max_tokens: int = 8096) -> str:
+          model: str, max_tokens: int = 8096) -> str:
     import time
     last_err = None
+    price_in, price_out = _PRICING.get(model, (0.0, 0.0))
     for attempt in range(3):
         try:
             msg = client.chat.completions.create(
@@ -111,8 +119,8 @@ def _call(client: OpenAI, system: str, user: str,
             )
             usage = msg.usage
             if usage:
-                cost = (usage.prompt_tokens / 1_000_000 * _PRICE_IN +
-                        usage.completion_tokens / 1_000_000 * _PRICE_OUT)
+                cost = (usage.prompt_tokens / 1_000_000 * price_in +
+                        usage.completion_tokens / 1_000_000 * price_out)
                 _last_usage.update({
                     "prompt_tokens": usage.prompt_tokens,
                     "completion_tokens": usage.completion_tokens,
@@ -235,7 +243,7 @@ CONVERT_PROMPT = """Вот сырой текст резюме:
 
 def convert_to_corporate(raw_text: str, api_key: str) -> dict:
     client = OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
-    raw = _call(client, CONVERT_SYSTEM, CONVERT_PROMPT.format(raw_text=raw_text.strip()), max_tokens=16000)
+    raw = _call(client, CONVERT_SYSTEM, CONVERT_PROMPT.format(raw_text=raw_text.strip()), model=CONVERT_MODEL, max_tokens=16000)
     result = _normalize(_parse_json(raw))
     if "projects" in result:
         result["projects"] = _sort_projects(result["projects"])
@@ -384,6 +392,7 @@ def tailor_resume(brief: str, resume_data: dict, api_key: str) -> dict:
         client,
         TAILOR_SYSTEM,
         TAILOR_PROMPT.format(brief=brief.strip(), resume_json=resume_json),
+        model=TAILOR_MODEL,
         max_tokens=32000,
     )
     changes = _parse_json(raw)
@@ -447,6 +456,7 @@ def humanize_resume(resume_data: dict, api_key: str) -> dict:
         client,
         HUMANIZE_SYSTEM,
         HUMANIZE_PROMPT.format(resume_json=resume_json),
+        model=TAILOR_MODEL,
     )
     changes = _parse_json(raw)
     result = copy.deepcopy(resume_data)
@@ -497,7 +507,7 @@ def tailor_resume_from_text(brief: str, resume_text: str, api_key: str) -> dict:
   "match_notes": "почему подходит под запрос"
 }}"""
 
-    raw = _call(client, system, prompt, max_tokens=16000)
+    raw = _call(client, system, prompt, model=TAILOR_MODEL, max_tokens=16000)
     result = _normalize(_parse_json(raw))
     if "projects" in result:
         result["projects"] = _sort_projects(result["projects"])
