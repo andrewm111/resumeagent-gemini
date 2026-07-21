@@ -78,6 +78,69 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
     is_persistent=True,
 )
 
+PAGE_SIZE = 20
+
+
+def _spec_keyboard(items: list[tuple[int, dict]], page: int, prefix: str) -> InlineKeyboardMarkup:
+    """Build a paginated keyboard from (absolute_index, specialist) pairs.
+
+    Telegram rejects reply_markup outright once it grows too large, so the
+    specialist list must never be rendered as a single unbounded keyboard.
+    """
+    start = page * PAGE_SIZE
+    chunk = items[start:start + PAGE_SIZE]
+    keyboard = [
+        [InlineKeyboardButton(s["label"][:60], callback_data=f"{prefix}:{idx}")]
+        for idx, s in chunk
+    ]
+    total_pages = max(1, (len(items) - 1) // PAGE_SIZE + 1)
+    if total_pages > 1:
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton("◀", callback_data=f"page:{prefix}:{page - 1}"))
+        nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="noop"))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton("▶", callback_data=f"page:{prefix}:{page + 1}"))
+        keyboard.append(nav)
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def handle_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not _allowed(query.from_user.id):
+        return
+
+    _, prefix, page_str = query.data.split(":")
+    page = int(page_str)
+    view_key = "specialists_view" if prefix == "spec" else "dl_view"
+    items = context.user_data.get(view_key, [])
+    if not items:
+        await query.answer("Список устарел, обнови командой /list или отправь бриф заново.", show_alert=True)
+        return
+
+    try:
+        await query.edit_message_reply_markup(reply_markup=_spec_keyboard(items, page, prefix))
+    except Exception:
+        logger.exception("Pagination error")
+
+
+async def handle_noop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Unhandled exception", exc_info=context.error)
+    if isinstance(update, Update) and update.effective_chat:
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"Произошла ошибка: {context.error}",
+            )
+        except Exception:
+            pass
+
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update.effective_user.id):
@@ -117,14 +180,12 @@ async def handle_brief(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     context.user_data["specialists"] = specialists
+    view = list(enumerate(specialists))
+    context.user_data["specialists_view"] = view
 
-    keyboard = [
-        [InlineKeyboardButton(s["label"][:60], callback_data=f"spec:{i}")]
-        for i, s in enumerate(specialists)
-    ]
     await update.message.reply_text(
         "Бриф получен. Выбери специалиста или напиши имя для поиска:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=_spec_keyboard(view, 0, "spec"),
     )
     return WAITING_SPECIALIST
 
@@ -166,13 +227,11 @@ async def handle_confirm_tailor(update: Update, context: ContextTypes.DEFAULT_TY
 
     if query.data == "tailor:no":
         specialists = context.user_data.get("specialists", [])
-        keyboard = [
-            [InlineKeyboardButton(s["label"][:60], callback_data=f"spec:{i}")]
-            for i, s in enumerate(specialists)
-        ]
+        view = list(enumerate(specialists))
+        context.user_data["specialists_view"] = view
         await query.edit_message_text(
             "Выбери другого специалиста или напиши имя для поиска:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=_spec_keyboard(view, 0, "spec"),
         )
         return WAITING_SPECIALIST
 
@@ -226,13 +285,10 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return WAITING_SPECIALIST
 
-    keyboard = [
-        [InlineKeyboardButton(s["label"][:60], callback_data=f"spec:{i}")]
-        for i, s in matches
-    ]
+    context.user_data["specialists_view"] = matches
     await update.message.reply_text(
         f"Найдено {len(matches)}: выбери специалиста:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=_spec_keyboard(matches, 0, "spec"),
     )
     return WAITING_SPECIALIST
 
@@ -383,15 +439,13 @@ async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not specialists:
         await update.message.reply_text("База пуста.")
         return
-    keyboard = [
-        [InlineKeyboardButton(s["label"][:60], callback_data=f"dl:{i}")]
-        for i, s in enumerate(specialists)
-    ]
     context.user_data["dl_specialists"] = specialists
+    view = list(enumerate(specialists))
+    context.user_data["dl_view"] = view
     await update.message.reply_text(
         f"📋 *Специалисты в базе ({len(specialists)}):*\nНажми — получишь DOCX.",
         parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=_spec_keyboard(view, 0, "dl"),
     )
 
 
@@ -469,7 +523,10 @@ def main():
     app.add_handler(CommandHandler("help", cmd_start))
     app.add_handler(CommandHandler("list", cmd_list))
     app.add_handler(CallbackQueryHandler(handle_download, pattern=r"^dl:"))
+    app.add_handler(CallbackQueryHandler(handle_page, pattern=r"^page:"))
+    app.add_handler(CallbackQueryHandler(handle_noop, pattern=r"^noop$"))
     app.add_handler(conv)
+    app.add_error_handler(error_handler)
 
     logger.info("Gemini бот запущен")
     app.run_polling(drop_pending_updates=True)
